@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Cat & Mouse Mini Gameplay Preview</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 20px; font-size: 24px; font-weight: bold; color: white; text-shadow: 2px 2px 0 #000; }
+        #gameOver {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; display: none;
+            background: rgba(0,0,0,0.8); padding: 40px; border-radius: 10px; color: white;
+        }
+        #gameOver h1 { color: #ff4444; font-size: 48px; margin: 0 0 20px 0; }
+        button { padding: 10px 20px; font-size: 24px; cursor: pointer; border-radius: 5px; border: none; background: #4CAF50; color: white; font-weight: bold;}
+        button:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <div id="ui">Score: <span id="score">0</span></div>
+    
+    <div id="gameOver">
+        <h1>CAT CAUGHT YOU!</h1>
+        <p style="font-size: 24px">Final Score: <span id="finalScore">0</span></p>
+        <button onclick="restart()">Restart Game</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let baseSpeed = 8;
+        let currentSpeed = baseSpeed;
+        let score = 0;
+        let isGameOver = false;
+
+        let obstacleHits = 0;
+        let timeSinceLastHit = 0;
+        const recoveryTime = 240; // Approx 4 seconds at 60fps
+
+        const groundY = canvas.height - 100;
+
+        let mouse = { x: canvas.width / 2, y: groundY - 40, size: 40, emoji: '🐭' };
+        let cat = { x: canvas.width / 2 - 400, y: groundY - 60, size: 60, emoji: '🐱' };
+        
+        const catFarOffset = -400;
+        const catCloseOffset = -100;
+
+        let obstacles = [];
+        let frames = 0;
+
+        function spawnObstacle() {
+            obstacles.push({ x: canvas.width, y: groundY - 40, size: 40, emoji: '📦' });
+        }
+
+        function drawEmoji(emoji, x, y, size) {
+            ctx.font = size + "px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(emoji, x, y + size);
+        }
+
+        function update() {
+            if (isGameOver) return;
+            frames++;
+            score += (currentSpeed / 10);
+            document.getElementById('score').innerText = Math.floor(score);
+
+            // Spawn obstacles
+            if (frames % 100 === 0 && Math.random() > 0.3) {
+                spawnObstacle();
+            }
+
+            // Update obstacles
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].x -= currentSpeed;
+                
+                // Collision
+                if (Math.abs(obstacles[i].x - mouse.x) < 30) {
+                    hitObstacle();
+                    obstacles.splice(i, 1);
+                    i--;
+                }
+            }
+
+            // Recovery logic
+            if (obstacleHits === 1) {
+                timeSinceLastHit++;
+                if (timeSinceLastHit >= recoveryTime) {
+                    obstacleHits = 0;
+                    timeSinceLastHit = 0;
+                    currentSpeed = baseSpeed;
+                }
+            }
+
+            // Update Cat position
+            let targetCatX = mouse.x + catFarOffset;
+            if (obstacleHits === 1) targetCatX = mouse.x + catCloseOffset;
+            if (obstacleHits >= 2) targetCatX = mouse.x;
+
+            cat.x += (targetCatX - cat.x) * 0.05;
+        }
+
+        function hitObstacle() {
+            obstacleHits++;
+            timeSinceLastHit = 0;
+
+            if (obstacleHits === 1) {
+                currentSpeed = baseSpeed * 0.4; // Slow down
+            } else if (obstacleHits >= 2) {
+                isGameOver = true;
+                currentSpeed = 0;
+                document.getElementById('gameOver').style.display = 'block';
+                document.getElementById('finalScore').innerText = Math.floor(score);
+            }
+        }
+
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Ground
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+            ctx.fillStyle = '#228B22';
+            ctx.fillRect(0, groundY, canvas.width, 20);
+
+            // Draw Obstacles
+            obstacles.forEach(ob => {
+                drawEmoji(ob.emoji, ob.x, ob.y, ob.size);
+            });
+
+            // Draw Characters
+            drawEmoji(cat.emoji, cat.x, cat.y, cat.size);
+            drawEmoji(mouse.emoji, mouse.x, mouse.y, mouse.size);
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        window.restart = function() {
+            score = 0;
+            currentSpeed = baseSpeed;
+            isGameOver = false;
+            obstacleHits = 0;
+            timeSinceLastHit = 0;
+            obstacles = [];
+            cat.x = mouse.x + catFarOffset;
+            document.getElementById('gameOver').style.display = 'none';
+        }
+
+        // Start
+        loop();
+
+        // Mouse click to jump (visual only for fun)
+        window.addEventListener('mousedown', () => {
+            if(!isGameOver && mouse.y === groundY - 40) {
+                let jump = 0;
+                let interval = setInterval(() => {
+                    jump++;
+                    mouse.y -= 5;
+                    if(jump > 20) {
+                        clearInterval(interval);
+                        let fall = setInterval(() => {
+                            mouse.y += 5;
+                            if(mouse.y >= groundY - 40) {
+                                mouse.y = groundY - 40;
+                                clearInterval(fall);
+                            }
+                        }, 20);
+                    }
+                }, 20);
+            }
+        });
+    </script>
+</body>
+</html>
